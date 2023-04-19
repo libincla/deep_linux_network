@@ -1,7 +1,7 @@
 ## linux网络收包总览
 
 
-![tcpip](/Users/wecash/Desktop/codes/deep_into_network/kernel_recv_transmit_package/tcpip.png)
+![tcpip](kernel_recv_transmit_package/tcpip.png)
 
 如同上图，`TCP/IP`网络分层模型中，整个协议栈被分成为了
 - 物理层
