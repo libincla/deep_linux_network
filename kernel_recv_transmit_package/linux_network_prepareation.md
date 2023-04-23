@@ -66,3 +66,40 @@ enum
 在网络子系统初始化过程中，会为每个`CPU`初始化`softnet_data`，也会为`RX_SOFTIRQ`和`TX_SOFTIRQ`注册处理函数，流程图如下
 
 ![sub_initial](zixitongchushihua.png)
+
+内核通过调用`subsys_initcall`来初始化各个子系统，在源代码目录里可以用`grep`命令搜索出许多对这个函数的调用，这里要说的是网络子系统的初始化，会执行`net_dev_init`函数
+
+```C
+// file: net/core/dev.c
+
+static int __init net_dev_init(void) 
+{
+    for_each_possible_cpu(i) {
+        struct softnet_data *sd = &per_cpu(softnet_data, i);
+        memset(sd, 0, sizeof(*sd));
+        skb_queue_head_init(&sd->input_pkt_queue);
+        skb_queue_head_init(&sd->process_queue);
+        sd->completion_queue = NULL;
+        INIT_LIST_HEAD(&sd->poll_list);
+        ...
+    }
+    open_softirq(NET_TX_SOFTIRQ, net_tx_action);
+    open_softirq(NET_RX_SOFTIRQ, net_rx_action);
+
+}
+
+subsys_initcall(net_dev_init);
+```
+
+在这个函数中，会为每个`CPU`都申请一个`softnet_data`数据结构，这个数据结构里的`poll_list`用于等待驱动程序将其`poll`函数注册进来
+稍后网卡驱动程序初始化的时候可以看到这一过程
+另外，`open_softirq`会为每一种软中断都注册一个处理函数，`NET_TX_SOFTIRQ`的处理函数为`net_tx_action`，`NET_RX_SOFTIRQ`的处理函数为`net_rx_action`
+继续跟踪`open_softirq`后会发现这个注册的方式记录在`softirq_vec`变量中的。后面`ksoftirqd`线程收到软中断的时候，也会使用这个变量来找到每个软中断对应的处理函数
+
+```C
+// file: kernel/softirq.c
+void open_softirq(int nr, void(*action)(struct softirq_action *)) 
+{
+    softirq_vec[nr].action = action;
+}
+```
