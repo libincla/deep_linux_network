@@ -103,3 +103,16 @@ void open_softirq(int nr, void(*action)(struct softirq_action *))
     softirq_vec[nr].action = action;
 }
 ```
+
+
+### 协议栈注册
+
+内核实现了网络层的`IP`协议，也实现了传输层的`TCP`和`UDP1`协议，这些协议对应的实现函数分别是
+1. `ip_rcv()`
+2. `tcp_v4_rcv()`
+3. `udp_v4_rcv()`
+和平时代码方式不同的是，内核是通过注册方式来实现的
+`linux`内核中的`fs_initcall`和`subsys_initcall`类似，就是初始化模块的入口
+`fs_initcall`调用`net_init`后开始网络协议栈注册，通过`inet_init`，将这些函数注册到`inet_protos`和`ptype_base`数据结构中，如图
+
+![proto_register](protol_register.png)
