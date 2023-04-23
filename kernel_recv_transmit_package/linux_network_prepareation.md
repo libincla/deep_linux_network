@@ -60,3 +60,9 @@ enum
     NR_SOFTIRQS
 };
 ```
+
+### 网络子系统初始化
+
+在网络子系统初始化过程中，会为每个`CPU`初始化`softnet_data`，也会为`RX_SOFTIRQ`和`TX_SOFTIRQ`注册处理函数，流程图如下
+
+![sub_initial](zixitongchushihua.png)
