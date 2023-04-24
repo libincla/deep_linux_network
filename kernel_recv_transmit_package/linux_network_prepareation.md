@@ -116,3 +116,81 @@ void open_softirq(int nr, void(*action)(struct softirq_action *))
 `fs_initcall`调用`net_init`后开始网络协议栈注册，通过`inet_init`，将这些函数注册到`inet_protos`和`ptype_base`数据结构中，如图
 
 ![proto_register](protol_register.png)
+
+相关代码如下:
+
+```C
+// file: net/ipv4/af_inet.c
+static struct packet_type ip_packet_type __read_mostly = {
+    .type = cpu_to_be16(ETH_P_IP),
+    .func = ip_rcv,
+};
+static const struct net_protocol udp_protocol = {
+    .handler = udp_rcv,
+    .err_handler = udp_err,
+    .no_policy = 1,
+    .netns_ok = 1,
+};
+static const struct net_protocol tcp_protocol = {
+    .early_demux = tcp_v4_early_demux,
+    .handler = tcp_v4_rcv,
+    .err_handler = tcp_v4_rcv,
+    .no_policy = 1,
+    .netns_ok = 1,
+};
+static int __init inet_init(void) 
+{
+    ......
+    if (inet_add_protocol(&icmp_protocol, IPPROTO_ICMP) < 0)
+        pr_crit("%s: cannot add ICMP protocol\n", __func__)
+    if (inet_add_protocol(&udp_protocol, IPPROTO_UDP) < 0)
+        pr_crit("%s: cannot add UDP protocol\n", __func__)
+    if (inet_add_protocol(&tcp_protocol, IPPROTO_TCP) < 0)
+        pr_crit("%s: cannot add TCP protocol\n", __func__)
+    ......
+    dev_add_pack(&ip_packet_type);
+}
+
+```
+
+从上面代码看到，`udp_protol`结构体的`handler`是`udp_rcv`，`tcp_protol`结构体的`handler`是`tcp_v4_rcv`，他们通过`inet_add_protocol`函数被初始化进来
+
+```C
+// file: net/ipv4/protocol.c
+
+int inet_add_protocol(const struct net_protocol *prot, unsigned char protocol)
+{   
+    if(!prot->netns_ok) {
+        pr_err("Protocol %u is not namespace aware, cannot register\n",protocol);
+        return -EINVAL;
+    }  
+    return !cmpxchg((const struct net_protocol **)&inet_protos[protocol], NULL, prot) ?0:-1;
+}
+```
+
+`inet_add_protocol`函数将`TCP`和`UDP`对应的处理函数都注册到`inet_protocol`数组中了，再看`dev_add_pack(&ip_packet_type);`这一行，
+`ip_packet_type`结构体中的`type`是协议名称，`func`是`ip_rcv`函数，它们在`dev_add_pack`中会被注册到`ptype_base`哈希表中
+
+
+```C
+// file: net/core/dev.c
+void dev_add_pack(struct packet_type *pt)
+{
+    struct list_head *head = ptype_head(pt);
+    ......
+
+}
+static inline struct list_head *ptype_head(const struct packet_type *pt)
+{
+    if (pt->type == htons(ETH_P_ALL))
+        return &ptype_all;
+    else 
+        return &ptype_base[ntohs(pt->type) & PTYPE_HASH_MASK];
+}
+```
+
+这里要记住`net_protos`记录着`TCP`，`UDP`处理的函数地址，`ptype_base`存储着`ip_rcv()`函数的处理地址。
+软中断中会通过`ptype_base`找到`ip_rcv`函数地址，进而将`IP`包正确的送到`ip_rcv`中执行。
+在`ip_rcv`中将会通过`inet_protos`找到`TCP`或者`UDP`进而处理函数，再把包转发给`udp_rcv()`或者`tcp_v4_rcv()`函数
+
+扩展下，如果看一下`ip_rcv`和`udp_rcv`等函数的代码， 能看到很多协议处理过程，例如，`ip_rcv`会处理`iptables netfilter`过滤，`udp_rcv`中会判断`socket`接收队列是否满，对应的相关内核参数是`net.core_rmem_max`和`net.core.rmem_default`
