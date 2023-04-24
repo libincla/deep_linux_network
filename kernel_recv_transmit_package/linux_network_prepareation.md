@@ -194,3 +194,8 @@ static inline struct list_head *ptype_head(const struct packet_type *pt)
 在`ip_rcv`中将会通过`inet_protos`找到`TCP`或者`UDP`进而处理函数，再把包转发给`udp_rcv()`或者`tcp_v4_rcv()`函数
 
 扩展下，如果看一下`ip_rcv`和`udp_rcv`等函数的代码， 能看到很多协议处理过程，例如，`ip_rcv`会处理`iptables netfilter`过滤，`udp_rcv`中会判断`socket`接收队列是否满，对应的相关内核参数是`net.core_rmem_max`和`net.core.rmem_default`
+
+
+
+### 网卡驱动初始化
+
